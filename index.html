@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#10151c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
+<title>Mensajes al aire</title>
+<style>
+:root{--bg:#10151c;--pn:#19212c;--ln:#2b3646;--tx:#e9eef5;--mu:#8d9bb0}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;background:var(--bg);color:var(--tx);font:15px system-ui,sans-serif}
+body.o{background:#000;overflow:hidden}html:fullscreen body{cursor:none}
+[hidden]{display:none!important}
+#ctl{max-width:1400px;margin:auto;padding:16px;display:grid;gap:12px}
+h1{font-size:24px;letter-spacing:-.3px}p{color:var(--mu);line-height:1.5}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{background:var(--pn);color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:10px 14px;font:inherit;min-height:42px;cursor:pointer}
+.btn.big{font-weight:600;padding:12px 18px}.btn.on{background:#e5372b;border-color:#e5372b}.btn.sel{background:#3d8bff;border-color:#3d8bff}
+#g{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px}
+@media(max-width:900px){#g{grid-template-columns:1fr}}
+#pv{overflow:auto;max-height:72vh;background:#000;border:1px solid var(--ln);border-radius:8px}
+#zi{position:relative;width:100%;aspect-ratio:16/9}
+#zi video{position:absolute;inset:0;width:100%;height:100%}
+#ov{position:absolute;inset:0;cursor:crosshair;touch-action:none}
+.rg{position:absolute;border:2px solid;pointer-events:none}.rg.sel{border-width:4px}
+.rg b{position:absolute;left:0;top:0;font:700 12px system-ui;color:#000;padding:2px 6px;white-space:nowrap}
+#pc{width:100%;aspect-ratio:16/9;border:1px solid var(--ln);border-radius:8px;background:#000}
+label{display:flex;gap:6px;align-items:center;color:var(--mu)}
+select,input[type=color],input[type=text]{background:var(--pn);color:var(--tx);border:1px solid var(--ln);border-radius:6px;padding:6px;font:inherit}
+input[type=color]{padding:0;width:40px;height:34px}input[type=range]{accent-color:#ffb020}
+.hv{position:fixed;width:2px;height:2px;opacity:0;pointer-events:none}
+#out{display:none}body.o #ctl{display:none}body.o #out{display:grid;height:100%;place-items:center}
+#oc{width:min(100vw,100vh*16/9);aspect-ratio:16/9}
+#msg{position:fixed;left:0;right:0;bottom:12px;text-align:center;color:#fff;font:600 17px system-ui;text-shadow:0 1px 4px #000;pointer-events:none}
+</style></head><body>
+<div id="ctl">
+<div class="row"><h1>Mensajes al aire</h1><span id="st" style="color:var(--mu)">Sin captura</span></div>
+<p>1. Capturá la ventana de WhatsApp. 2. Marcá <b>Mensajes</b>, <b>Nombre</b>, <b>Foto</b> y <b>Lista</b> sobre la imagen (con el zoom se marcan fácil la foto y el nombre; se guarda solo). 3. Abrí la salida: se ubica en la pantalla 2; hacé clic en ella para pantalla completa. Atajos: tecla 1 = Mensajes, tecla 2 = Lista.</p>
+<div class="row"><button class="btn big" id="cap">1. Capturar WhatsApp</button><button class="btn big" id="open">2. Abrir salida</button>
+<button class="btn big sel" id="vm">Mensajes</button><button class="btn big" id="vl">Lista</button><button class="btn big on" id="air">AL AIRE: ON</button></div>
+<div id="g">
+<div><div class="row" style="margin-bottom:8px">Marcar:
+<label><input type="radio" name="rk" value="ms" checked>Mensajes</label><label><input type="radio" name="rk" value="nm">Nombre</label><label><input type="radio" name="rk" value="av">Foto</label><label><input type="radio" name="rk" value="ls">Lista</label>
+<label>Zoom <input type="range" id="zm" min="1" max="5" step=".25" value="1"></label><button class="btn" id="clr">Borrar marcas</button></div>
+<div id="pv"><div id="zi"><video id="cv" muted autoplay playsinline></video><div id="ov"></div></div></div></div>
+<div><canvas id="pc" width="960" height="540"></canvas>
+<div class="row" style="margin-top:8px"><label>Tema <select id="th"></select></label><label>Color <input type="color" id="acc"></label><label>Tamaño <input type="range" id="sz" min="40" max="100"></label>
+<label>Posición <select id="ps"><option value="l">Izquierda</option><option value="c">Centro</option><option value="r">Derecha</option></select></label>
+<label>Fondo <select id="bgm"><option value="paint">Pintado oscuro</option><option value="green">Verde (key)</option><option value="alpha">Transparente</option></select></label>
+<label>Bordes <input type="range" id="rd" min="0" max="60"></label><label>Título de la lista <input type="text" id="lt"></label></div></div>
+</div></div>
+<div id="out"><canvas id="oc" width="1920" height="1080"></canvas><video id="v2" class="hv" muted autoplay playsinline></video><div id="msg"></div></div>
+<script>
+var D={th:'Violeta',acc:'#ffb020',size:90,pos:'c',bg:'paint',rad:30,show:true,view:'msg',lt:'Mensajes recibidos',reg:{av:null,nm:null,ms:null,ls:null}},stream=null;
+try{Object.assign(D,JSON.parse(localStorage.tsw||'{}'))}catch(e){}D.show=true;D.view='msg';
+const OUT=location.search=='?salida',$=s=>document.querySelector(s),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const TH={Violeta:['#140c20','#4b2a7a','#2c1a4d','#ffb020'],Carbón:['#101216','#2c323d','#1a1e26','#ffb020'],'Azul noche':['#0a111f','#1d3a6b','#12294d','#3d8bff'],Vino:['#1a0b10','#5a1730','#3a0f21','#ff8a5c'],Bosque:['#0a1610','#1f5a3b','#123626','#4ade80']};
+if(!TH[D.th])D.th='Violeta';
+/* Fondo oscuro "pintado": pinceladas suaves, viñeta y grano (se genera una vez) */
+function paint(th){const c=document.createElement('canvas');c.width=960;c.height=540;const x=c.getContext('2d'),[b,m,d]=TH[th];let s=7;const r=()=>(s=s*16807%2147483647)/2147483647;
+ x.fillStyle=b;x.fillRect(0,0,960,540);x.lineCap='round';
+ for(let i=0;i<70;i++){x.strokeStyle=r()<.5?m:d;x.globalAlpha=.08+r()*.14;x.lineWidth=40+r()*140;const X=r()*960,Y=r()*540;x.beginPath();x.moveTo(X,Y);x.bezierCurveTo(X+r()*300-150,Y+r()*200-100,X+r()*400-200,Y+r()*300-150,X+r()*500-250,Y+r()*300-150);x.stroke()}
+ x.globalAlpha=1;const g=x.createRadialGradient(480,270,150,480,270,620);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,.65)');x.fillStyle=g;x.fillRect(0,0,960,540);
+ const im=x.getImageData(0,0,960,540),p=im.data;for(let i=0;i<p.length;i+=4){const n=(r()-.5)*14;p[i]+=n;p[i+1]+=n;p[i+2]+=n}x.putImageData(im,0,0);return c}
+const mkst=()=>({bg:null,bk:'',al:0,pop:1,fr:0,hp:null,vw:'msg',nc:document.createElement('canvas'),hc:document.createElement('canvas')}),
+ rr=(x,a,b,w,h,r)=>{x.beginPath();x.roundRect(a,b,w,h,r)};
+/* Salida: ventana redondeada + zócalo pegado (foto y nombre, o título de la lista) */
+function render(x,v,D,S,W=1920,H=1080){
+ x.clearRect(0,0,W,H);
+ if(D.bg=='paint'){if(S.bk!=D.th){S.bg=paint(D.th);S.bk=D.th}x.drawImage(S.bg,0,0,W,H)}else if(D.bg=='green'){x.fillStyle='#00b140';x.fillRect(0,0,W,H)}
+ let tg=D.show?1:0;if(S.vw!=D.view){tg=0;if(S.al<.03)S.vw=D.view}
+ S.al+=(tg-S.al)*.18;S.pop+=(1-S.pop)*.15;
+ const R=D.reg,vw=v.videoWidth,vh=v.videoHeight,lv=S.vw=='list',K=lv?R.ls:R.ms;if(S.al<.01||!vw||!K)return;
+ const px=r=>[r[0]*vw,r[1]*vh,(r[2]-r[0])*vw,(r[3]-r[1])*vh],m=px(K);if(m[2]<8||m[3]<8)return;
+ const tick=S.fr++%6==0,sc=Math.min(W*.92*D.size/100/m[2],H*.86*D.size/100/m[3]),mw=m[2]*sc,mh=m[3]*sc,Z=Math.max(84,Math.min(140,mw*.11)),tot=mh+Z,
+  X=D.pos=='l'?60:D.pos=='r'?W-mw-60:(W-mw)/2,Y=(H-tot)/2,T=TH[D.th];
+ if(tick&&!lv&&R.av){const a=px(R.av);if(a[2]>2&&a[3]>2){const c=S.hc,t=c.getContext('2d',{willReadFrequently:true});c.width=c.height=8;t.drawImage(v,a[0],a[1],a[2],a[3],0,0,8,8);const p=t.getImageData(0,0,8,8).data;let d=0;if(S.hp)for(let i=0;i<p.length;i++)if(i%4<3)d+=Math.abs(p[i]-S.hp[i]);S.hp=p;if(d>250)S.pop=0}}
+ if(tick&&!lv&&R.nm){const n=px(R.nm);if(n[2]>2&&n[3]>2){const c=S.nc,t=c.getContext('2d',{willReadFrequently:true});c.width=n[2]|0;c.height=n[3]|0;t.drawImage(v,n[0],n[1],n[2],n[3],0,0,c.width,c.height);
+  const im=t.getImageData(0,0,c.width,c.height),p=im.data,L=i=>.3*p[i]+.59*p[i+1]+.11*p[i+2],b=L(0),inv=b>128;
+  for(let i=0;i<p.length;i+=4){const q=inv?b-L(i):L(i)-b;p[i]=p[i+1]=p[i+2]=255;p[i+3]=clamp(q*3,0,255)}t.putImageData(im,0,0)}}
+ x.save();x.globalAlpha=S.al;x.shadowColor='rgba(0,0,0,.6)';x.shadowBlur=40;x.shadowOffsetY=14;x.fillStyle='#0b0d11';rr(x,X,Y,mw,tot,D.rad);x.fill();x.shadowColor='transparent';
+ x.save();rr(x,X,Y,mw,tot,D.rad);x.clip();
+ const g=x.createLinearGradient(X,Y,X,Y+Z);g.addColorStop(0,T[2]);g.addColorStop(1,T[0]);x.fillStyle=g;x.fillRect(X,Y,mw,Z);
+ x.drawImage(v,m[0],m[1],m[2],m[3],X,Y+Z,mw,mh);x.fillStyle=D.acc;x.fillRect(X,Y+Z-3,mw,6);
+ let nx=X+Z*.3;x.globalAlpha=S.al*(lv?1:S.pop);const off=lv?0:(1-S.pop)*40;
+ if(lv){x.fillStyle='#fff';x.font='700 '+Z*.4+'px system-ui';x.textBaseline='middle';x.fillText(D.lt||'Mensajes recibidos',nx,Y+Z/2);x.textBaseline='alphabetic'}
+ else{
+  if(R.av){const a=px(R.av),s=Math.min(a[2],a[3]),d=Z*.72,cx=nx+d/2-off,cy=Y+Z/2;
+   if(s>2){x.save();x.beginPath();x.arc(cx,cy,d/2,0,7);x.clip();x.drawImage(v,a[0]+(a[2]-s)/2,a[1]+(a[3]-s)/2,s,s,cx-d/2,cy-d/2,d,d);x.restore();x.lineWidth=4;x.strokeStyle=D.acc;x.beginPath();x.arc(cx,cy,d/2,0,7);x.stroke()}nx+=d+Z*.25}
+  if(R.nm&&S.nc.width>2&&S.nc.height>2){const h=Z*.46,w=Math.min(S.nc.width*h/S.nc.height,mw-(nx-X)-30);x.drawImage(S.nc,0,0,S.nc.width,S.nc.height,nx-off,Y+Z/2-h/2,w,h)}}
+ x.restore();x.restore();
+ x.save();x.globalAlpha=S.al;x.lineWidth=5;x.strokeStyle=D.acc;rr(x,X,Y,mw,tot,D.rad);x.stroke();x.restore()}
+/* Ventana de salida: independiente (lee la configuración guardada y toma la captura de la ventana de control; si no puede, captura por su cuenta con un clic) */
+function initOut(){document.body.classList.add('o');const v=$('#v2'),x=$('#oc').getContext('2d'),S=mkst(),m=$('#msg');let own=null;
+ const fs=()=>document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen(),
+  ld=()=>{try{Object.assign(D,JSON.parse(localStorage.tsw||'{}'))}catch(e){}};ld();addEventListener('storage',ld);
+ addEventListener('click',async()=>{if(v.videoWidth)fs();else{try{own=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:30},audio:false})}catch(e){}}});
+ addEventListener('keydown',e=>{if(e.key=='f'||e.key=='F')fs()});
+ (function f(){let s=null;try{s=opener&&opener.stream}catch(e){}s=own||s;if(s&&v.srcObject!==s)v.srcObject=s;
+  document.body.style.background=D.bg=='green'?'#00b140':D.bg=='alpha'?'transparent':'#000';
+  m.textContent=!v.videoWidth?'Sin imagen: en la ventana de control tocá «1. Capturar WhatsApp», o hacé clic acá y elegí la ventana de WhatsApp':document.fullscreenElement?'':'Clic o tecla F = pantalla completa';
+  render(x,v,D,S);requestAnimationFrame(f)})()}
+function initCtl(){const cv=$('#cv'),pc=$('#pc').getContext('2d'),ov=$('#ov'),S=mkst();let rk='ms',dr=null;
+ const save=()=>localStorage.tsw=JSON.stringify(D),st=t=>$('#st').textContent=t,
+  RG={ms:['#3d8bff','Mensajes'],nm:['#ffb020','Nombre'],av:['#22c55e','Foto'],ls:['#c084fc','Lista']};
+ ov.innerHTML=Object.entries(RG).map(([k,[c,n]])=>`<div class="rg" id="r_${k}" style="border-color:${c}"><b style="background:${c}">${n}</b></div>`).join('');
+ const rg=()=>{for(const k in RG){const e=$('#r_'+k),r=D.reg[k];e.style.display=r?'block':'none';e.classList.toggle('sel',k==rk);if(r)Object.assign(e.style,{left:r[0]*100+'%',top:r[1]*100+'%',width:(r[2]-r[0])*100+'%',height:(r[3]-r[1])*100+'%'})}},
+  sv=w=>{D.view=w;$('#vm').classList.toggle('sel',w=='msg');$('#vl').classList.toggle('sel',w=='list');save()};
+ $('#th').innerHTML=Object.keys(TH).map(k=>`<option>${k}</option>`).join('');
+ const B=(id,k,f=v=>v)=>{const e=$('#'+id);e.value=D[k];e.oninput=()=>{D[k]=f(e.value);save()}};
+ B('th','th');B('acc','acc');B('sz','size',Number);B('ps','pos');B('bgm','bg');B('rd','rad',Number);B('lt','lt');
+ $('#th').onchange=()=>{D.acc=TH[D.th][3];$('#acc').value=D.acc;save()};
+ document.querySelectorAll('[name=rk]').forEach(r=>r.onchange=()=>{rk=r.value;rg()});
+ $('#zm').oninput=e=>$('#zi').style.width=e.target.value*100+'%';
+ $('#clr').onclick=()=>{D.reg={av:null,nm:null,ms:null,ls:null};save();rg()};
+ $('#vm').onclick=()=>sv('msg');$('#vl').onclick=()=>sv('list');
+ addEventListener('keydown',e=>{if(e.target.type=='text')return;if(e.key=='1')sv('msg');if(e.key=='2')sv('list')});
+ $('#cap').onclick=async()=>{try{stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:30},audio:false});cv.srcObject=stream;
+  stream.getVideoTracks()[0].onended=()=>st('Captura detenida');
+  cv.onloadedmetadata=()=>{$('#zi').style.aspectRatio=cv.videoWidth+'/'+cv.videoHeight;st('Capturando '+cv.videoWidth+'×'+cv.videoHeight)}}catch(e){st('No se pudo capturar (usá Chrome o Edge en una PC)')}};
+ $('#open').onclick=async()=>{const w=open(location.pathname+'?salida','salida','popup,width=960,height=540');if(!w){st('El navegador bloqueó la ventana: permitila');return}
+  st('Salida abierta: hacé clic en ella para pantalla completa');
+  try{if(window.getScreenDetails){const d=await getScreenDetails(),c=d.currentScreen,s=d.screens.find(q=>q.left!==c.left||q.top!==c.top);if(s){w.moveTo(s.availLeft,s.availTop);w.resizeTo(s.availWidth,s.availHeight);st('Salida en la pantalla 2: hacé clic en ella para pantalla completa')}}}catch(e){}};
+ $('#air').onclick=e=>{D.show=!D.show;e.target.textContent='AL AIRE: '+(D.show?'ON':'OFF');e.target.classList.toggle('on',D.show);save()};
+ const pt=e=>{const b=ov.getBoundingClientRect();return[clamp((e.clientX-b.left)/b.width,0,1),clamp((e.clientY-b.top)/b.height,0,1)]};
+ ov.onpointerdown=e=>{ov.setPointerCapture(e.pointerId);dr=pt(e);D.reg[rk]=[dr[0],dr[1],dr[0],dr[1]];rg()};
+ ov.onpointermove=e=>{if(!dr)return;const q=pt(e);D.reg[rk]=[Math.min(dr[0],q[0]),Math.min(dr[1],q[1]),Math.max(dr[0],q[0]),Math.max(dr[1],q[1])];rg()};
+ ov.onpointerup=()=>{dr=null;const r=D.reg[rk];if(r&&(r[2]-r[0]<.004||r[3]-r[1]<.004))D.reg[rk]=null;save();rg()};
+ rg();sv('msg');
+ (function f(){pc.setTransform(.5,0,0,.5,0,0);render(pc,cv,D,S);requestAnimationFrame(f)})()}
+OUT?initOut():initCtl();
+navigator.serviceWorker&&navigator.serviceWorker.register('sw.js');
+</script></body></html>
